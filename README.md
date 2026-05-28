@@ -227,6 +227,107 @@ These are common Horizon transaction and operation result codes developers may s
 
 ---
 
+## Response Structure
+
+All StellarKit API endpoints follow a standardized JSON response envelope. This ensures developers know exactly what structure to expect from every API call, whether it succeeds or fails.
+
+### Success Response Envelope
+
+Every successful response includes the following structure:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "meta": {}
+}
+```
+
+**Fields:**
+
+- `success` **(boolean)**: Always `true` for successful responses.
+- `data` **(object)**: The actual response payload. Structure varies by endpoint.
+- `meta` **(object)**: Optional metadata about the response, such as pagination information.
+
+#### Non-Paginated Success Example
+
+```json
+{
+  "success": true,
+  "data": {
+    "accountId": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
+    "sequence": "12345678",
+    "xlm": {
+      "balance": "100.0000000",
+      "minimumBalance": "1.0000000",
+      "spendableBalance": "99.0000000"
+    }
+  },
+  "meta": {}
+}
+```
+
+#### Paginated Success Example
+
+When an endpoint returns paginated results, the `meta` field includes pagination details:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "txn_001",
+      "type": "payment",
+      "amount": "50.0000000"
+    },
+    {
+      "id": "txn_002",
+      "type": "payment",
+      "amount": "25.5000000"
+    }
+  ],
+  "meta": {
+    "cursor": "eyJpZCI6InR4bl8wMDIifQ==",
+    "limit": 10,
+    "order": "desc"
+  }
+}
+```
+
+### Error Response Envelope
+
+When an error occurs, the response structure differs:
+
+```json
+{
+  "success": false,
+  "error": {
+    "type": "ACCOUNT_NOT_FOUND",
+    "message": "Account does not exist on the Stellar network"
+  }
+}
+```
+
+**Fields:**
+
+- `success` **(boolean)**: Always `false` for error responses.
+- `error.type` **(string)**: A machine-readable error code for programmatic handling (e.g., `ACCOUNT_NOT_FOUND`, `INVALID_REQUEST`, `RATE_LIMITED`).
+- `error.message` **(string)**: A human-readable error message describing what went wrong.
+
+#### Error Response Example
+
+```json
+{
+  "success": false,
+  "error": {
+    "type": "VALIDATION_ERROR",
+    "message": "Invalid Stellar account ID. Must be a valid public key starting with 'G'."
+  }
+}
+```
+
+---
+
 ## Example Responses
 
 ### Health
