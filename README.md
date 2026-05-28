@@ -93,6 +93,27 @@ Visit `http://localhost:3000` after startup.
 
 ---
 
+## Understanding Stellar Account Reserves
+
+Stellar requires all accounts to maintain a **minimum XLM balance** to exist on the ledger. This mechanism deters ledger spam and ensures the network remains efficient.
+
+- **Base Reserve:** The fundamental unit of reserve on Stellar, currently set to **0.5 XLM**.
+- **Account Reserve:** To be activated, an account must hold at least **2 base reserves** (1 XLM).
+- **Subentry Reserve:** Every item an account owns (such as a trustline for a new asset, an open offer, a data entry, or an additional signer) is called a subentry. Each subentry increases the account's minimum balance requirement by **1 base reserve** (0.5 XLM).
+
+### Example Calculation
+If an account is funded and holds **3 trustlines**, its minimum balance is calculated as follows:
+- **Account Base:** 2 base reserves = 1 XLM
+- **3 Trustlines:** 3 subentries × 0.5 XLM = 1.5 XLM
+- **Total Minimum Balance:** 2.5 XLM
+
+### Spendable Balance
+An account's **spendable balance** is the amount of XLM it can freely transfer or spend. It is calculated as:
+`Spendable Balance = Total Balance - Minimum Balance - Liabilities`
+
+You don't need to calculate this manually! The `GET /account/:id` endpoint provided by this API automatically computes and returns both the `minimumBalance` and `spendableBalance` for any Stellar account.
+
+---
 ## API Overview
 
 ### `GET /`
