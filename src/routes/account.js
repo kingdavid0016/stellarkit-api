@@ -5,7 +5,11 @@ const { success } = require("../utils/response");
 const { validateAccountId } = require("../utils/validators");
 const { getAssetMetadataFromToml } = require("../utils/tomlResolver");
 const { Asset } = require("@stellar/stellar-sdk");
-const { validateAccountId, validateAssetCode, validateLimit } = require("../utils/validators");
+const {
+  validateAccountId,
+  validateAssetCode,
+  validateLimit,
+} = require("../utils/validators");
 const { accountSummaryRateLimiter } = require("../middleware/rateLimiter");
 const { buildAccountAgeResponse } = require("../utils/accountAge");
 
@@ -87,10 +91,22 @@ router.get("/:id", async (req, res, next) => {
         spendableBalance: spendable.toFixed(7),
       },
       reserveBreakdown: {
-        baseReserve: { xlm: toXLM(baseReserve), stroops: toStroops(baseReserve) },
-        accountReserve: { xlm: toXLM(accountReserve), stroops: toStroops(accountReserve) },
-        subentryReserve: { xlm: toXLM(subentryReserve), stroops: toStroops(subentryReserve) },
-        totalLocked: { xlm: toXLM(totalLocked), stroops: toStroops(totalLocked) },
+        baseReserve: {
+          xlm: toXLM(baseReserve),
+          stroops: toStroops(baseReserve),
+        },
+        accountReserve: {
+          xlm: toXLM(accountReserve),
+          stroops: toStroops(accountReserve),
+        },
+        subentryReserve: {
+          xlm: toXLM(subentryReserve),
+          stroops: toStroops(subentryReserve),
+        },
+        totalLocked: {
+          xlm: toXLM(totalLocked),
+          stroops: toStroops(totalLocked),
+        },
         spendable: { xlm: toXLM(spendable), stroops: toStroops(spendable) },
       },
       assets: balances.assets,
@@ -140,96 +156,100 @@ router.get("/:id/balances", async (req, res, next) => {
  * @param {string} assetCode - Asset code to inspect (e.g. USD)
  * @param {string} assetIssuer - Asset issuer public key or native
  */
-router.get("/:id/freeze-status/:assetCode/:assetIssuer", async (req, res, next) => {
-  try {
-    const { id, assetCode, assetIssuer } = req.params;
-    validateAccountId(id);
-    validateAssetCode(assetCode);
+router.get(
+  "/:id/freeze-status/:assetCode/:assetIssuer",
+  async (req, res, next) => {
+    try {
+      const { id, assetCode, assetIssuer } = req.params;
+      validateAccountId(id);
+      validateAssetCode(assetCode);
 
-    const normalizedAssetCode = assetCode.toUpperCase();
-    const normalizedAssetIssuer =
-      normalizedAssetCode === "XLM" ? assetIssuer.toLowerCase() : assetIssuer;
+      const normalizedAssetCode = assetCode.toUpperCase();
+      const normalizedAssetIssuer =
+        normalizedAssetCode === "XLM" ? assetIssuer.toLowerCase() : assetIssuer;
 
-    if (normalizedAssetCode === "XLM") {
-      if (normalizedAssetIssuer !== "native") {
-        const err = new Error('Invalid asset issuer for XLM. Use "native" as the issuer.');
-        err.isValidation = true;
-        throw err;
-      }
-    } else {
-      validateAccountId(assetIssuer);
-    }
-
-    const account = await server.loadAccount(id);
-
-    const trustline =
-      normalizedAssetCode === "XLM"
-        ? account.balances.find((b) => b.asset_type === "native")
-        : account.balances.find(
-          (b) =>
-            b.asset_type !== "native" &&
-            b.asset_code === normalizedAssetCode &&
-            b.asset_issuer === assetIssuer,
-        );
-
-    if (!trustline) {
-      const notFoundErr = new Error(
-        `Account does not hold asset ${normalizedAssetCode}:${assetIssuer}.`
-      );
-      notFoundErr.status = 404;
-      throw notFoundErr;
-    }
-
-    const isAuthorized = trustline.is_authorized !== false;
-    const isAuthorizedToMaintainLiabilities =
-      trustline.is_authorized_to_maintain_liabilities === true;
-    const isFrozen =
-      normalizedAssetCode === "XLM"
-        ? false
-        : !isAuthorized && !isAuthorizedToMaintainLiabilities;
-    const isPartiallyFrozen =
-      normalizedAssetCode !== "XLM" &&
-      !isAuthorized &&
-      isAuthorizedToMaintainLiabilities;
-    const canReceive = normalizedAssetCode === "XLM" ? true : isAuthorized;
-    const canSend =
-      normalizedAssetCode === "XLM"
-        ? true
-        : isAuthorized || isAuthorizedToMaintainLiabilities;
-
-    const detail = (() => {
       if (normalizedAssetCode === "XLM") {
-        return "Native XLM is not subject to issuer freeze authorization.";
+        if (normalizedAssetIssuer !== "native") {
+          const err = new Error(
+            'Invalid asset issuer for XLM. Use "native" as the issuer.',
+          );
+          err.isValidation = true;
+          throw err;
+        }
+      } else {
+        validateAccountId(assetIssuer);
       }
 
-      if (!isAuthorized && isAuthorizedToMaintainLiabilities) {
-        return "The issuer has revoked authorization for this trustline but allows the account to maintain liabilities. The account can send via existing liabilities but cannot receive new amounts.";
+      const account = await server.loadAccount(id);
+
+      const trustline =
+        normalizedAssetCode === "XLM"
+          ? account.balances.find((b) => b.asset_type === "native")
+          : account.balances.find(
+              (b) =>
+                b.asset_type !== "native" &&
+                b.asset_code === normalizedAssetCode &&
+                b.asset_issuer === assetIssuer,
+            );
+
+      if (!trustline) {
+        const notFoundErr = new Error(
+          `Account does not hold asset ${normalizedAssetCode}:${assetIssuer}.`,
+        );
+        notFoundErr.status = 404;
+        throw notFoundErr;
       }
 
-      if (!isAuthorized) {
-        return "The issuer has revoked authorization for this trustline. The account cannot send or receive the asset.";
-      }
+      const isAuthorized = trustline.is_authorized !== false;
+      const isAuthorizedToMaintainLiabilities =
+        trustline.is_authorized_to_maintain_liabilities === true;
+      const isFrozen =
+        normalizedAssetCode === "XLM"
+          ? false
+          : !isAuthorized && !isAuthorizedToMaintainLiabilities;
+      const isPartiallyFrozen =
+        normalizedAssetCode !== "XLM" &&
+        !isAuthorized &&
+        isAuthorizedToMaintainLiabilities;
+      const canReceive = normalizedAssetCode === "XLM" ? true : isAuthorized;
+      const canSend =
+        normalizedAssetCode === "XLM"
+          ? true
+          : isAuthorized || isAuthorizedToMaintainLiabilities;
 
-      return "The trustline is authorized and the account can send and receive this asset normally.";
-    })();
+      const detail = (() => {
+        if (normalizedAssetCode === "XLM") {
+          return "Native XLM is not subject to issuer freeze authorization.";
+        }
 
-    return success(res, {
-      accountId: account.id,
-      asset: {
-        assetCode: normalizedAssetCode,
-        assetIssuer:
-          normalizedAssetCode === "XLM" ? "native" : assetIssuer,
-      },
-      isFrozen,
-      isPartiallyFrozen,
-      canSend,
-      canReceive,
-      detail,
-    });
-  } catch (err) {
-    handleAccountNotFound(err, next);
-  }
-});
+        if (!isAuthorized && isAuthorizedToMaintainLiabilities) {
+          return "The issuer has revoked authorization for this trustline but allows the account to maintain liabilities. The account can send via existing liabilities but cannot receive new amounts.";
+        }
+
+        if (!isAuthorized) {
+          return "The issuer has revoked authorization for this trustline. The account cannot send or receive the asset.";
+        }
+
+        return "The trustline is authorized and the account can send and receive this asset normally.";
+      })();
+
+      return success(res, {
+        accountId: account.id,
+        asset: {
+          assetCode: normalizedAssetCode,
+          assetIssuer: normalizedAssetCode === "XLM" ? "native" : assetIssuer,
+        },
+        isFrozen,
+        isPartiallyFrozen,
+        canSend,
+        canReceive,
+        detail,
+      });
+    } catch (err) {
+      handleAccountNotFound(err, next);
+    }
+  },
+);
 
 /**
  * GET /account/:id/can-receive/:assetCode/:assetIssuer
@@ -244,109 +264,120 @@ router.get("/:id/freeze-status/:assetCode/:assetIssuer", async (req, res, next) 
  * @param {string} assetCode - Asset code to check (e.g. USD)
  * @param {string} assetIssuer - Asset issuer public key or native
  */
-router.get("/:id/can-receive/:assetCode/:assetIssuer", async (req, res, next) => {
-  try {
-    const { id, assetCode, assetIssuer } = req.params;
-    validateAccountId(id);
-    validateAssetCode(assetCode);
+router.get(
+  "/:id/can-receive/:assetCode/:assetIssuer",
+  async (req, res, next) => {
+    try {
+      const { id, assetCode, assetIssuer } = req.params;
+      validateAccountId(id);
+      validateAssetCode(assetCode);
 
-    const normalizedAssetCode = assetCode.toUpperCase();
-    const normalizedAssetIssuer =
-      normalizedAssetCode === "XLM" ? assetIssuer.toLowerCase() : assetIssuer;
+      const normalizedAssetCode = assetCode.toUpperCase();
+      const normalizedAssetIssuer =
+        normalizedAssetCode === "XLM" ? assetIssuer.toLowerCase() : assetIssuer;
 
-    if (normalizedAssetCode === "XLM") {
-      if (normalizedAssetIssuer !== "native") {
-        const err = new Error('Invalid asset issuer for XLM. Use "native" as the issuer.');
-        err.isValidation = true;
-        throw err;
+      if (normalizedAssetCode === "XLM") {
+        if (normalizedAssetIssuer !== "native") {
+          const err = new Error(
+            'Invalid asset issuer for XLM. Use "native" as the issuer.',
+          );
+          err.isValidation = true;
+          throw err;
+        }
+      } else {
+        validateAccountId(assetIssuer);
       }
-    } else {
-      validateAccountId(assetIssuer);
-    }
 
-    const account = await server.loadAccount(id);
-    const reasons = [];
+      const account = await server.loadAccount(id);
+      const reasons = [];
 
-    // For native XLM, always allowed if account exists
-    if (normalizedAssetCode === "XLM") {
-      return success(res, {
-        accountId: account.id,
-        asset: {
-          assetCode: "XLM",
-          assetIssuer: "native",
-        },
-        canReceive: true,
-        reasons: [],
-        trustlineExists: true,
-        isAuthorized: true,
-        availableCapacity: null,
-        currentBalance: parseFloat(
-          account.balances.find((b) => b.asset_type === "native")?.balance || "0"
-        ),
-        limit: null,
-      });
-    }
+      // For native XLM, always allowed if account exists
+      if (normalizedAssetCode === "XLM") {
+        return success(res, {
+          accountId: account.id,
+          asset: {
+            assetCode: "XLM",
+            assetIssuer: "native",
+          },
+          canReceive: true,
+          reasons: [],
+          trustlineExists: true,
+          isAuthorized: true,
+          availableCapacity: null,
+          currentBalance: parseFloat(
+            account.balances.find((b) => b.asset_type === "native")?.balance ||
+              "0",
+          ),
+          limit: null,
+        });
+      }
 
-    // For non-native assets, check trustline
-    const trustline = account.balances.find(
-      (b) =>
-        b.asset_type !== "native" &&
-        b.asset_code === normalizedAssetCode &&
-        b.asset_issuer === assetIssuer
-    );
+      // For non-native assets, check trustline
+      const trustline = account.balances.find(
+        (b) =>
+          b.asset_type !== "native" &&
+          b.asset_code === normalizedAssetCode &&
+          b.asset_issuer === assetIssuer,
+      );
 
-    if (!trustline) {
-      reasons.push("No trustline exists for this asset.");
+      if (!trustline) {
+        reasons.push("No trustline exists for this asset.");
+        return success(res, {
+          accountId: account.id,
+          asset: {
+            assetCode: normalizedAssetCode,
+            assetIssuer: assetIssuer,
+          },
+          canReceive: false,
+          reasons,
+          trustlineExists: false,
+          isAuthorized: false,
+          availableCapacity: 0,
+          currentBalance: 0,
+          limit: 0,
+        });
+      }
+
+      const isAuthorized = trustline.is_authorized === true;
+      if (!isAuthorized) {
+        reasons.push("Trustline is not authorized by the issuer.");
+      }
+
+      const currentBalance = parseFloat(trustline.balance || "0");
+      const limit = parseFloat(trustline.limit || "0");
+      const buyingLiabilities = parseFloat(trustline.buying_liabilities || "0");
+      const availableCapacity = Math.max(
+        0,
+        limit - currentBalance - buyingLiabilities,
+      );
+
+      if (availableCapacity === 0) {
+        reasons.push(
+          "No available capacity on trustline (limit reached or fully utilized).",
+        );
+      }
+
+      const canReceive = isAuthorized && availableCapacity > 0;
+
       return success(res, {
         accountId: account.id,
         asset: {
           assetCode: normalizedAssetCode,
           assetIssuer: assetIssuer,
         },
-        canReceive: false,
+        canReceive,
         reasons,
-        trustlineExists: false,
-        isAuthorized: false,
-        availableCapacity: 0,
-        currentBalance: 0,
-        limit: 0,
+        trustlineExists: true,
+        isAuthorized,
+        availableCapacity,
+        currentBalance,
+        limit,
       });
+    } catch (err) {
+      handleAccountNotFound(err, next);
     }
-
-    const isAuthorized = trustline.is_authorized === true;
-    if (!isAuthorized) {
-      reasons.push("Trustline is not authorized by the issuer.");
-    }
-
-    const currentBalance = parseFloat(trustline.balance || "0");
-    const limit = parseFloat(trustline.limit || "0");
-    const buyingLiabilities = parseFloat(trustline.buying_liabilities || "0");
-    const availableCapacity = Math.max(0, limit - currentBalance - buyingLiabilities);
-
-    if (availableCapacity === 0) {
-      reasons.push("No available capacity on trustline (limit reached or fully utilized).");
-    }
-
-    const canReceive = isAuthorized && availableCapacity > 0;
-
-    return success(res, {
-      accountId: account.id,
-      asset: {
-        assetCode: normalizedAssetCode,
-        assetIssuer: assetIssuer,
-      },
-      canReceive,
-      reasons,
-      trustlineExists: true,
-      isAuthorized,
-      availableCapacity,
-      currentBalance,
-      limit,
-    });
-  } catch (err) {
-    handleAccountNotFound(err, next);
-  }
-});
+  },
+);
 
 /**
  * GET /account/:id/sequence
@@ -373,6 +404,15 @@ router.get("/:id/sequence", async (req, res, next) => {
     handleAccountNotFound(err, next);
   }
 });
+
+ AccountTrustlineHealthDasboardEndpoint
+router.get(
+  "/:id/summary",
+  accountSummaryRateLimiter,
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      validateAccountId(id);
 
 /**
  * GET /account/:id/inactivity
@@ -589,43 +629,34 @@ router.get("/:id/summary", accountSummaryRateLimiter, async (req, res, next) => 
     const { id } = req.params;
     validateAccountId(id);
 
-    const [
-      accountResult,
-      txResult,
-      offersResult,
-      claimableResult,
-    ] = await Promise.allSettled([
-      server.loadAccount(id),
-      server.transactions().forAccount(id).limit(10).order("desc").call(),
-      server.offers().forAccount(id).limit(50).call(),
-      server.claimableBalances().forAccount(id).limit(50).call(),
-    ]);
+      const [accountResult, txResult, offersResult, claimableResult] =
+        await Promise.allSettled([
+          server.loadAccount(id),
+          server.transactions().forAccount(id).limit(10).order("desc").call(),
+          server.offers().forAccount(id).limit(50).call(),
+          server.claimableBalances().forAccount(id).limit(50).call(),
+        ]);
 
-    return success(res, {
-      account:
-        accountResult.status === "fulfilled"
-          ? accountResult.value
-          : null,
+      return success(res, {
+        account:
+          accountResult.status === "fulfilled" ? accountResult.value : null,
 
-      recentTransactions:
-        txResult.status === "fulfilled"
-          ? txResult.value.records
-          : [],
+        recentTransactions:
+          txResult.status === "fulfilled" ? txResult.value.records : [],
 
-      openOffers:
-        offersResult.status === "fulfilled"
-          ? offersResult.value.records
-          : [],
+        openOffers:
+          offersResult.status === "fulfilled" ? offersResult.value.records : [],
 
-      claimableBalances:
-        claimableResult.status === "fulfilled"
-          ? claimableResult.value.records
-          : [],
-    });
-  } catch (err) {
-    handleAccountNotFound(err, next);
-  }
-});
+        claimableBalances:
+          claimableResult.status === "fulfilled"
+            ? claimableResult.value.records
+            : [],
+      });
+    } catch (err) {
+      handleAccountNotFound(err, next);
+    }
+  },
+);
 
 /**
  * GET /account/:id/trustlines
@@ -718,13 +749,21 @@ router.get("/:id/merge-eligibility", async (req, res, next) => {
     const blockers = [];
 
     // 1. Check for non-native asset balances and open trustlines
-    const nonNativeBalances = account.balances.filter(b => b.asset_type !== "native");
+    const nonNativeBalances = account.balances.filter(
+      (b) => b.asset_type !== "native",
+    );
     if (nonNativeBalances.length > 0) {
-      const hasPositiveBalance = nonNativeBalances.some(b => parseFloat(b.balance) > 0);
+      const hasPositiveBalance = nonNativeBalances.some(
+        (b) => parseFloat(b.balance) > 0,
+      );
       if (hasPositiveBalance) {
-        blockers.push("Account has non-native asset balances. All assets must be sent or burned before merging.");
+        blockers.push(
+          "Account has non-native asset balances. All assets must be sent or burned before merging.",
+        );
       }
-      blockers.push(`Account has ${nonNativeBalances.length} open trustline(s). All trustlines must be removed.`);
+      blockers.push(
+        `Account has ${nonNativeBalances.length} open trustline(s). All trustlines must be removed.`,
+      );
     }
 
     // 2. Check for open offers
@@ -736,7 +775,9 @@ router.get("/:id/merge-eligibility", async (req, res, next) => {
     // 3. Check for data entries
     const dataEntries = Object.keys(account.data_attr || {});
     if (dataEntries.length > 0) {
-      blockers.push(`Account has ${dataEntries.length} data entry/entries. All data entries must be removed.`);
+      blockers.push(
+        `Account has ${dataEntries.length} data entry/entries. All data entries must be removed.`,
+      );
     }
 
     return success(res, {
@@ -745,11 +786,14 @@ router.get("/:id/merge-eligibility", async (req, res, next) => {
       accountDetails: {
         accountId: account.id,
         subentryCount: account.subentry_count,
-        balances: account.balances.map(b => ({
-          asset: b.asset_type === "native" ? "XLM" : `${b.asset_code}:${b.asset_issuer}`,
-          balance: b.balance
-        }))
-      }
+        balances: account.balances.map((b) => ({
+          asset:
+            b.asset_type === "native"
+              ? "XLM"
+              : `${b.asset_code}:${b.asset_issuer}`,
+          balance: b.balance,
+        })),
+      },
     });
   } catch (err) {
     handleAccountNotFound(err, next);
@@ -783,11 +827,7 @@ router.get("/:id/payments", async (req, res, next) => {
       : "desc";
     const cursor = req.query.cursor || undefined;
 
-    let query = server
-      .operations()
-      .forAccount(id)
-      .limit(limit)
-      .order(order);
+    let query = server.operations().forAccount(id).limit(limit).order(order);
 
     if (cursor) query = query.cursor(cursor);
 
@@ -805,9 +845,9 @@ router.get("/:id/payments", async (req, res, next) => {
           type: op.type,
           amount: isPayment ? op.amount : op.starting_balance,
           asset: {
-            code: isPayment ? (op.asset_code || "XLM") : "XLM",
-            issuer: isPayment ? (op.asset_issuer || null) : null,
-            type: isPayment ? (op.asset_type || "native") : "native",
+            code: isPayment ? op.asset_code || "XLM" : "XLM",
+            issuer: isPayment ? op.asset_issuer || null : null,
+            type: isPayment ? op.asset_type || "native" : "native",
           },
           sender: isPayment ? op.from : op.funder,
           receiver: isPayment ? op.to : op.account,
@@ -817,11 +857,12 @@ router.get("/:id/payments", async (req, res, next) => {
       }
     });
 
-    const nextCursor = lastPaymentIndex >= 0
-      ? rawRecords[lastPaymentIndex].paging_token
-      : rawRecords.length > 0
-        ? rawRecords[rawRecords.length - 1].paging_token
-        : null;
+    const nextCursor =
+      lastPaymentIndex >= 0
+        ? rawRecords[lastPaymentIndex].paging_token
+        : rawRecords.length > 0
+          ? rawRecords[rawRecords.length - 1].paging_token
+          : null;
 
     return success(res, paymentOps, {
       meta: {
@@ -1008,11 +1049,7 @@ router.get("/:id/timeline", async (req, res, next) => {
     const limit = validateLimit(req.query.limit || 10, 50);
     const cursor = req.query.cursor || undefined;
 
-    let query = server
-      .operations()
-      .forAccount(id)
-      .limit(limit)
-      .order("desc");
+    let query = server.operations().forAccount(id).limit(limit).order("desc");
 
     if (cursor) query = query.cursor(cursor);
 
@@ -1065,8 +1102,10 @@ router.get("/:id/timeline", async (req, res, next) => {
         case "path_payment_strict_receive":
         case "path_payment_strict_send":
           const isPathSent = op.from === id;
-          const sentAsset = op.source_asset_type === "native" ? "XLM" : op.source_asset_code;
-          const receivedAsset = op.asset_type === "native" ? "XLM" : op.asset_code;
+          const sentAsset =
+            op.source_asset_type === "native" ? "XLM" : op.source_asset_code;
+          const receivedAsset =
+            op.asset_type === "native" ? "XLM" : op.asset_code;
 
           if (isPathSent) {
             return {
@@ -1104,9 +1143,14 @@ router.get("/:id/timeline", async (req, res, next) => {
         case "manage_sell_offer":
         case "manage_buy_offer":
         case "create_passive_sell_offer":
-          const isRemove = (op.type !== "create_passive_sell_offer" && parseFloat(op.amount) === 0 && op.offer_id !== "0");
-          const sellAsset = op.selling_asset_type === "native" ? "XLM" : op.selling_asset_code;
-          const buyAsset = op.buying_asset_type === "native" ? "XLM" : op.buying_asset_code;
+          const isRemove =
+            op.type !== "create_passive_sell_offer" &&
+            parseFloat(op.amount) === 0 &&
+            op.offer_id !== "0";
+          const sellAsset =
+            op.selling_asset_type === "native" ? "XLM" : op.selling_asset_code;
+          const buyAsset =
+            op.buying_asset_type === "native" ? "XLM" : op.buying_asset_code;
 
           if (isRemove) {
             return {
@@ -1201,12 +1245,12 @@ router.post("/:id/validate-signers", async (req, res, next) => {
     const matchedSigners = [];
 
     for (const providedSigner of signers) {
-      const match = accountSigners.find(s => s.key === providedSigner);
+      const match = accountSigners.find((s) => s.key === providedSigner);
       if (match) {
         combinedWeight += match.weight;
         matchedSigners.push({
           key: match.key,
-          weight: match.weight
+          weight: match.weight,
         });
       }
     }
@@ -1219,7 +1263,7 @@ router.post("/:id/validate-signers", async (req, res, next) => {
       canSignLow: combinedWeight >= thresholds.low_threshold,
       canSignMed: combinedWeight >= thresholds.med_threshold,
       canSignHigh: combinedWeight >= thresholds.high_threshold,
-      matchedSigners
+      matchedSigners,
     });
   } catch (err) {
     handleAccountNotFound(err, next);
@@ -1247,7 +1291,9 @@ router.post("/:id/multisig-plan", async (req, res, next) => {
 
     const { availableSigners } = req.body;
     if (!availableSigners || !Array.isArray(availableSigners)) {
-      const err = new Error("availableSigners must be an array of public keys.");
+      const err = new Error(
+        "availableSigners must be an array of public keys.",
+      );
       err.status = 400;
       return next(err);
     }
@@ -1269,21 +1315,24 @@ router.post("/:id/multisig-plan", async (req, res, next) => {
 
     // Filter to only signers that are in the availableSigners list
     const availableMatches = availableSigners
-      .map(key => accountSigners.find(s => s.key === key))
+      .map((key) => accountSigners.find((s) => s.key === key))
       .filter(Boolean);
 
     // Extract signer weights
-    const signerWeights = availableMatches.map(s => ({
+    const signerWeights = availableMatches.map((s) => ({
       key: s.key,
       weight: s.weight,
-      type: s.type
+      type: s.type,
     }));
 
     // Generate minimal combinations for each threshold
     const validCombinations = {
       low: findMinimalCombinations(availableMatches, thresholds.low_threshold),
       med: findMinimalCombinations(availableMatches, thresholds.med_threshold),
-      high: findMinimalCombinations(availableMatches, thresholds.high_threshold)
+      high: findMinimalCombinations(
+        availableMatches,
+        thresholds.high_threshold,
+      ),
     };
 
     return success(res, {
@@ -1292,7 +1341,7 @@ router.post("/:id/multisig-plan", async (req, res, next) => {
       medThreshold: thresholds.med_threshold,
       highThreshold: thresholds.high_threshold,
       signerWeights,
-      validCombinations
+      validCombinations,
     });
   } catch (err) {
     handleAccountNotFound(err, next);
@@ -1317,7 +1366,7 @@ function findMinimalCombinations(signers, threshold) {
   const n = signers.length;
 
   // Use bitmask to generate all subsets
-  for (let mask = 0; mask < (1 << n); mask++) {
+  for (let mask = 0; mask < 1 << n; mask++) {
     const combination = [];
     let totalWeight = 0;
 
@@ -1338,12 +1387,12 @@ function findMinimalCombinations(signers, threshold) {
   }
 
   // Find minimum size
-  const minSize = Math.min(...allCombinations.map(c => c.length));
+  const minSize = Math.min(...allCombinations.map((c) => c.length));
 
   // Filter to only minimal combinations
   const minimal = allCombinations
-    .filter(c => c.length === minSize)
-    .map(c => c.map(s => ({ key: s.key, weight: s.weight, type: s.type })));
+    .filter((c) => c.length === minSize)
+    .map((c) => c.map((s) => ({ key: s.key, weight: s.weight, type: s.type })));
 
   // Remove duplicates (sort by keys for comparison)
   const unique = [];
@@ -1351,7 +1400,7 @@ function findMinimalCombinations(signers, threshold) {
 
   for (const combo of minimal) {
     const sorted = combo.slice().sort((a, b) => a.key.localeCompare(b.key));
-    const key = sorted.map(s => s.key).join('|');
+    const key = sorted.map((s) => s.key).join("|");
 
     if (!seen.has(key)) {
       seen.add(key);
@@ -1364,7 +1413,7 @@ function findMinimalCombinations(signers, threshold) {
 
 /**
  * Helper to evaluate Stellar claimable balance predicates.
- * 
+ *
  * @param {Object} predicate - The predicate object from Horizon
  * @param {number} currentTime - Current unix timestamp in seconds
  * @returns {boolean} Whether the predicate is satisfied
@@ -1388,11 +1437,11 @@ function evaluatePredicate(predicate, currentTime) {
   }
 
   if (predicate.and) {
-    return predicate.and.every(p => evaluatePredicate(p, currentTime));
+    return predicate.and.every((p) => evaluatePredicate(p, currentTime));
   }
 
   if (predicate.or) {
-    return predicate.or.some(p => evaluatePredicate(p, currentTime));
+    return predicate.or.some((p) => evaluatePredicate(p, currentTime));
   }
 
   if (predicate.not) {
@@ -1430,11 +1479,11 @@ router.get("/:id/claimable-balances/eligible", async (req, res, next) => {
     const result = {
       eligible: [],
       notYetClaimable: [],
-      expired: []
+      expired: [],
     };
 
-    records.forEach(cb => {
-      const claimant = cb.claimants.find(c => c.destination === id);
+    records.forEach((cb) => {
+      const claimant = cb.claimants.find((c) => c.destination === id);
       if (!claimant) return;
 
       const isClaimable = evaluatePredicate(claimant.predicate, currentTime);
@@ -1450,7 +1499,7 @@ router.get("/:id/claimable-balances/eligible", async (req, res, next) => {
         amount: cb.amount,
         sponsor: cb.sponsor,
         lastModifiedLedger: cb.last_modified_ledger,
-        claimants: cb.claimants
+        claimants: cb.claimants,
       };
 
       if (isClaimable) {
@@ -1586,21 +1635,24 @@ router.get("/:id/transactions/search", async (req, res, next) => {
     }
 
     // Optional memo_type filter
-    const memoTypeFilter = req.query.memo_type ? String(req.query.memo_type).toLowerCase() : null;
+    const memoTypeFilter = req.query.memo_type
+      ? String(req.query.memo_type).toLowerCase()
+      : null;
     const validMemoTypes = ["text", "id", "hash", "return"];
 
     if (memoTypeFilter && !validMemoTypes.includes(memoTypeFilter)) {
       const err = new Error(
-        `Invalid memo_type: "${req.query.memo_type}". Valid values are: text, id, hash, return.`
+        `Invalid memo_type: "${req.query.memo_type}". Valid values are: text, id, hash, return.`,
       );
       err.status = 400;
       return next(err);
     }
 
     const limit = validateLimit(req.query.limit || 10, 200);
-    const order = req.query.order && ["asc", "desc"].includes(req.query.order)
-      ? req.query.order
-      : "desc";
+    const order =
+      req.query.order && ["asc", "desc"].includes(req.query.order)
+        ? req.query.order
+        : "desc";
     const cursor = req.query.cursor || undefined;
 
     // Fetch transactions from Horizon
@@ -1643,10 +1695,16 @@ router.get("/:id/transactions/search", async (req, res, next) => {
 
       // For text memos, do case-insensitive substring match
       if (tx.memo_type === "text") {
-        memoMatches = memoValue.toLowerCase().includes(searchValue.toLowerCase());
+        memoMatches = memoValue
+          .toLowerCase()
+          .includes(searchValue.toLowerCase());
       }
       // For id, hash, return - do exact match
-      else if (tx.memo_type === "id" || tx.memo_type === "hash" || tx.memo_type === "return") {
+      else if (
+        tx.memo_type === "id" ||
+        tx.memo_type === "hash" ||
+        tx.memo_type === "return"
+      ) {
         memoMatches = memoValue === searchValue;
       }
 
@@ -1686,10 +1744,13 @@ router.get("/:id/transactions/search", async (req, res, next) => {
     }
 
     // Determine if there are more results
-    const hasMore = matchingTransactions.length === limit && txResponse.records.length === fetchLimit;
-    const nextCursor = matchingTransactions.length > 0
-      ? matchingTransactions[matchingTransactions.length - 1].id
-      : lastCursor;
+    const hasMore =
+      matchingTransactions.length === limit &&
+      txResponse.records.length === fetchLimit;
+    const nextCursor =
+      matchingTransactions.length > 0
+        ? matchingTransactions[matchingTransactions.length - 1].id
+        : lastCursor;
 
     return success(res, matchingTransactions, {
       meta: {
@@ -1734,7 +1795,7 @@ router.get("/:id/pool-positions", async (req, res, next) => {
     // Filter trustlines to find liquidity pool shares
     // Liquidity pool shares have asset_type === "liquidity_pool_shares"
     const poolShareTrustlines = account.balances.filter(
-      (balance) => balance.asset_type === "liquidity_pool_shares"
+      (balance) => balance.asset_type === "liquidity_pool_shares",
     );
 
     if (poolShareTrustlines.length === 0) {
@@ -1759,7 +1820,7 @@ router.get("/:id/pool-positions", async (req, res, next) => {
             return null;
           }
           throw err;
-        })
+        }),
     );
 
     const poolDetails = await Promise.all(poolDetailsPromises);
@@ -1780,14 +1841,17 @@ router.get("/:id/pool-positions", async (req, res, next) => {
       const totalShares = parseFloat(pool.total_shares);
 
       // Calculate share percentage
-      const sharePercent = totalShares > 0 ? (accountShares / totalShares) * 100 : 0;
+      const sharePercent =
+        totalShares > 0 ? (accountShares / totalShares) * 100 : 0;
 
       // Calculate equivalent reserves
       const reserveA = pool.reserves[0];
       const reserveB = pool.reserves[1];
 
-      const equivalentReserveA = (parseFloat(reserveA.amount) * accountShares) / totalShares;
-      const equivalentReserveB = (parseFloat(reserveB.amount) * accountShares) / totalShares;
+      const equivalentReserveA =
+        (parseFloat(reserveA.amount) * accountShares) / totalShares;
+      const equivalentReserveB =
+        (parseFloat(reserveB.amount) * accountShares) / totalShares;
 
       positions.push({
         poolId: pool.id,
@@ -1840,8 +1904,13 @@ router.get("/:id/balances/xlm-equivalent", async (req, res, next) => {
     validateAccountId(id);
 
     const account = await server.loadAccount(id);
-    const nativeBalance = account.balances.find((b) => b.asset_type === "native");
-    const nonNativeBalances = account.balances.filter((b) => b.asset_type !== "native" && b.asset_type !== "liquidity_pool_shares");
+    const nativeBalance = account.balances.find(
+      (b) => b.asset_type === "native",
+    );
+    const nonNativeBalances = account.balances.filter(
+      (b) =>
+        b.asset_type !== "native" && b.asset_type !== "liquidity_pool_shares",
+    );
 
     const xlmAsset = Asset.native();
 
@@ -1867,7 +1936,9 @@ router.get("/:id/balances/xlm-equivalent", async (req, res, next) => {
         // Use path finding to find the best rate from asset to XLM
         // We want to know: if we SELL balanceAmount of sourceAsset, how much XLM do we get?
         // Horizon strictSendPaths: source asset -> destination asset
-        const paths = await server.strictSendPaths(sourceAsset, balanceAmount, [xlmAsset]).call();
+        const paths = await server
+          .strictSendPaths(sourceAsset, balanceAmount, [xlmAsset])
+          .call();
 
         if (paths.records && paths.records.length > 0) {
           const bestPath = paths.records[0];
@@ -1889,7 +1960,9 @@ router.get("/:id/balances/xlm-equivalent", async (req, res, next) => {
     const convertedBalances = await Promise.all(conversionPromises);
 
     // Calculate total XLM equivalent
-    let totalXlmEquivalentValue = parseFloat(nativeBalance ? nativeBalance.balance : "0");
+    let totalXlmEquivalentValue = parseFloat(
+      nativeBalance ? nativeBalance.balance : "0",
+    );
 
     convertedBalances.forEach((b) => {
       if (b.xlmEquivalent !== null) {
@@ -1947,7 +2020,9 @@ router.get("/:id/risk-score", async (req, res, next) => {
     // 1. Account Age
     const firstOp = firstOpResponse.records[0];
     const creationDate = firstOp ? new Date(firstOp.created_at) : new Date();
-    const ageInDays = Math.floor((new Date() - creationDate) / (1000 * 60 * 60 * 24));
+    const ageInDays = Math.floor(
+      (new Date() - creationDate) / (1000 * 60 * 60 * 24),
+    );
     let ageScore = 0;
     let ageDetail = "";
 
@@ -2000,11 +2075,12 @@ router.get("/:id/risk-score", async (req, res, next) => {
       name: "Signer Count",
       value: signerCount.toString(),
       impact: signerScore >= 15 ? "positive" : "negative",
-      detail: signerCount > 1
-        ? "Account uses multi-signature security."
-        : signerCount === 1
-          ? "Account has a standard single signer."
-          : "Account has no active signers (locked).",
+      detail:
+        signerCount > 1
+          ? "Account uses multi-signature security."
+          : signerCount === 1
+            ? "Account has a standard single signer."
+            : "Account has no active signers (locked).",
     });
 
     // 4. Trustline Count
@@ -2012,7 +2088,10 @@ router.get("/:id/risk-score", async (req, res, next) => {
     let trustlineScore = 0;
     if (trustlineCount >= 1 && trustlineCount <= 10) {
       trustlineScore = 20;
-    } else if (trustlineCount === 0 || (trustlineCount > 10 && trustlineCount <= 30)) {
+    } else if (
+      trustlineCount === 0 ||
+      (trustlineCount > 10 && trustlineCount <= 30)
+    ) {
       trustlineScore = 15;
     } else {
       trustlineScore = 5; // Potential spam or excessive assets
@@ -2022,15 +2101,16 @@ router.get("/:id/risk-score", async (req, res, next) => {
       name: "Trustline Count",
       value: trustlineCount.toString(),
       impact: trustlineScore >= 15 ? "positive" : "negative",
-      detail: trustlineCount > 30
-        ? "Account has an unusually high number of trustlines."
-        : `Account has ${trustlineCount} asset trustlines.`,
+      detail:
+        trustlineCount > 30
+          ? "Account has an unusually high number of trustlines."
+          : `Account has ${trustlineCount} asset trustlines.`,
     });
 
     // 5. Recent Transaction Frequency (last 24 hours)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recentTxCount = recentTxResponse.records.filter(
-      (tx) => new Date(tx.created_at) > oneDayAgo
+      (tx) => new Date(tx.created_at) > oneDayAgo,
     ).length;
 
     let txScore = 0;
@@ -2046,9 +2126,10 @@ router.get("/:id/risk-score", async (req, res, next) => {
       name: "Recent Activity",
       value: `${recentTxCount} tx / 24h`,
       impact: txScore >= 10 ? "positive" : "negative",
-      detail: recentTxCount > 50
-        ? "Account shows high recent transaction volume."
-        : "Account transaction frequency is within normal range.",
+      detail:
+        recentTxCount > 50
+          ? "Account shows high recent transaction volume."
+          : "Account transaction frequency is within normal range.",
     });
 
     // Determine rating
@@ -2072,12 +2153,12 @@ router.get("/:id/risk-score", async (req, res, next) => {
 });
 
 /**
- * GET /account/:id/counterparties
- * Analyzes the frequency of senders and receivers for the last 100 payment operations.
- *
- * @param {string} id - Stellar account public key
- */
-router.get("/:id/counterparties", async (req, res, next) => {
+ AccountTrustlineHealthDasboardEndpoint
+ * GET /account/:id/trustline-health
+ * Returns a complete health overview of all trustlines on an account,
+ * including authorization status, liability usage, available capacity,
+ * and warnings for trustlines near their limits.
+
  * GET /account/:id/age
  * Returns account age and longevity metrics for trust and reputation systems.
  *
@@ -2088,10 +2169,70 @@ router.get("/:id/counterparties", async (req, res, next) => {
  * - maturity: 'new' (<30 days), 'established' (30–364 days), or 'veteran' (≥365 days)
  * - createdAt: ISO 8601 timestamp of account creation
  * - createdAtLedger: Ledger sequence number of first funding transaction
+ main
  *
  * @param {string} id - Stellar account public key (G...)
  *
  * @example
+ AccountTrustlineHealthDasboardEndpoint
+ * GET /account/GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN/trustline-health
+ */
+router.get("/:id/trustline-health", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    validateAccountId(id);
+
+    const account = await server.loadAccount(id);
+
+    // Filter out native XLM and extract trustline health data
+    const trustlines = account.balances
+      .filter((b) => b.asset_type !== "native")
+      .map((trustline) => {
+        const balance = parseFloat(trustline.balance || "0");
+        const limit = parseFloat(trustline.limit || "0");
+        const buyingLiabilities = parseFloat(
+          trustline.buying_liabilities || "0",
+        );
+        const sellingLiabilities = parseFloat(
+          trustline.selling_liabilities || "0",
+        );
+
+        // Calculate usage percentage
+        // Usage = (balance + buying liabilities) / limit * 100
+        const usageAmount = balance + buyingLiabilities;
+        const usagePercent = limit > 0 ? (usageAmount / limit) * 100 : 0;
+
+        // Calculate available capacity
+        // Available = limit - balance - buying liabilities
+        const availableCapacity = Math.max(0, limit - usageAmount);
+
+        // Flag as warning if usage exceeds 90%
+        const warning = usagePercent > 90 ? "near_limit" : null;
+
+        return {
+          assetCode: trustline.asset_code,
+          assetIssuer: trustline.asset_issuer,
+          balance: balance.toString(),
+          limit: limit.toString(),
+          buyingLiabilities: buyingLiabilities.toString(),
+          sellingLiabilities: sellingLiabilities.toString(),
+          usagePercent: Math.round(usagePercent * 100) / 100, // Round to 2 decimals
+          availableCapacity: availableCapacity.toString(),
+          isAuthorized: trustline.is_authorized === true,
+          isClawbackEnabled: trustline.is_clawback_enabled || false,
+          warning: warning,
+        };
+      });
+
+    // Count warnings
+    const warningCount = trustlines.filter((t) => t.warning !== null).length;
+
+    return success(res, {
+      accountId: account.id,
+      trustlineCount: trustlines.length,
+      warningCount: warningCount,
+      trustlines: trustlines,
+
  * GET /account/GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN/age
  *
  * Response (200):
