@@ -364,6 +364,11 @@ export interface FeeEstimateResponse {
       p95: string
       p99: string
     }
+    history: Array<{
+      ledger: number
+      baseFee: number
+      capacityUsage: number
+    }>
     // Human-friendly additions
     context: string
     networkCongestion: 'low' | 'medium' | 'high'
