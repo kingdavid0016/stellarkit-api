@@ -5,11 +5,11 @@ const { server } = require("../config/stellar");
 const { success } = require("../utils/response");
 const { formatBalance } = require("../utils/formatBalance");
 const { assetHoldersRateLimiter } = require("../middleware/rateLimiter");
-const {
-  validateAccountId,
-  validateAssetCode,
-} = require("../utils/validators");
+const normalizeAssetCode = require("../middleware/normalizeAssetCode");
+const { validateAccountId, validateAssetCode } = require("../utils/validators");
 const { parsePaginationParams } = require("../utils/pagination");
+router.use(normalizeAssetCode);
+
 
 function findAssetBalance(account, assetCode, issuer) {
   return (account.balances || []).find(
