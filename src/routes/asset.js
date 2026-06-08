@@ -108,6 +108,17 @@ router.get("/:code/:issuer", async (req, res, next) => {
     validateAccountId(issuer);
 
     const assetCode = code.toUpperCase();
+    const cacheKey = `asset:${assetCode}:${issuer}`;
+    const fresh = req.query.fresh === "true";
+
+    // Check cache first (unless fresh=true)
+    if (!fresh) {
+      const cached = cacheService.get(cacheKey);
+      if (cached) {
+        res.set("X-Cache", "HIT");
+        return success(res, cached);
+      }
+    }
 
     // OPTIMIZATION: Parallel Horizon calls - fetch asset info and issuer account simultaneously
     // Response time improvement: ~50% faster (from ~400ms to ~200ms)
@@ -143,7 +154,7 @@ router.get("/:code/:issuer", async (req, res, next) => {
       };
     }
 
-    return success(res, {
+    const data = {
       assetCode: asset.asset_code,
       assetIssuer: asset.asset_issuer,
       assetType: asset.asset_type,
@@ -155,7 +166,13 @@ router.get("/:code/:issuer", async (req, res, next) => {
       liquidityPoolsAmount: asset.liquidity_pools_amount,
       flags: asset.flags,
       issuer: issuerInfo,
-    });
+    };
+
+    // Cache the response with 30s TTL
+    cacheService.set(cacheKey, data, 30);
+
+    res.set("X-Cache", "MISS");
+    return success(res, data);
   } catch (err) {
     next(err);
   }

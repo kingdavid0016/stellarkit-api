@@ -8,8 +8,7 @@ const { server } = require("../src/config/stellar");
 describe("StellarKit API", () => {
   // Clear caches before each test
   beforeEach(() => {
-    networkStatusCache.clear();
-    feeEstimateCache.clear();
+    cacheService.flush();
   });
 
   // ── Health ─────────────────────────────────────────────────────────────────
