@@ -383,7 +383,7 @@ router.get("/:id", async (req, res, next) => {
         subentryReserve: { xlm: toXLM(subentryReserve), stroops: toStroops(subentryReserve) },
         totalLocked: { xlm: toXLM(totalLocked), stroops: toStroops(totalLocked) },
         spendable: {
-          xlm: toXLM(parseFloat((account.balances || []).find((b) => b.asset_type === "native")?.balance || "0") - totalLocked),
+          xlm: toXLM(parseFloat((account.balances || []).find((b) => b.asset_type === "native")?.balance || "0") - totalLocked)),
           stroops: toStroops(
             parseFloat((account.balances || []).find((b) => b.asset_type === "native")?.balance || "0") - totalLocked,
           ),
@@ -454,7 +454,7 @@ router.get("/:id/sponsorship", async (req, res, next) => {
       server.accounts().sponsor(id).call(),
     ]);
 
-    const sponsoredEntries = [];
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     (account.balances || []).forEach((b) => {
       if (b.sponsor) {
@@ -486,18 +486,42 @@ router.get("/:id/sponsorship", async (req, res, next) => {
             sponsor: dataSponsors[key],
           });
         }
-      });
+        if (!op.transaction_successful) {
+          cursor = op.paging_token;
+          continue;
+        }
+
+        const assetCode = op.asset_code || "XLM";
+        const assetIssuer = op.asset_issuer || null;
+        const assetKey = assetIssuer ? `${assetCode}:${assetIssuer}` : assetCode;
+        const amount = parseFloat(op.amount || op.starting_balance || "0");
+
+        if (!volumeMap[assetKey]) {
+          volumeMap[assetKey] = {
+            assetCode,
+            assetIssuer,
+            totalSent: 0,
+            totalReceived: 0,
+          };
+        }
+
+        const isSent = (op.type === "payment" && op.from === id) || (op.type === "create_account" && op.funder === id);
+        if (isSent) volumeMap[assetKey].totalSent += amount;
+        else volumeMap[assetKey].totalReceived += amount;
+
+        totalTransactions++;
+        cursor = op.paging_token;
+      }
+
+      if (records.length < 200) done = true;
     }
 
     const accountsSponsoring = (sponsoringResponse.records || []).map((acc) => acc.id);
 
     return success(res, {
-      accountId: account.id,
-      accountSponsor: account.sponsor || null,
-      numSponsored: account.num_sponsored || 0,
-      numSponsoring: account.num_sponsoring || 0,
-      sponsoredEntries,
-      accountsSponsoring,
+      period: { days, from: since.toISOString(), to: new Date().toISOString() },
+      totalTransactions,
+      volumeByAsset,
     });
   } catch (err) {
     handleAccountNotFound(err, next);
@@ -1051,3 +1075,4 @@ router.post("/:id/multisig-plan", async (req, res, next) => {
 });
 
 module.exports = router;
+

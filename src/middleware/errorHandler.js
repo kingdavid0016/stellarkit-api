@@ -49,8 +49,9 @@ function errorHandler(err, req, res, next) {
         detail: horizonError.detail || "An error occurred with the Stellar network.",
         status: horizonError.status || err.response.status,
         extras: horizonError.extras || null,
-        ...(code && { code }),
-        ...(humanMessage && { message: humanMessage }),
+        ...(resultCode && { code: resultCode }),
+        ...(message && { message }),
+
       },
     });
   }
