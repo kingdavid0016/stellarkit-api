@@ -25,35 +25,49 @@ function logError(status, req, message) {
 }
 
 function errorHandler(err, req, res, next) {
-  // Stellar / Horizon specific errors
-  if (err.response && err.response.data) {
+  // Horizon errors returned from horizon-client / Stellar SDK
+  if (err && err.response && err.response.data) {
     const horizonError = err.response.data;
+    const extras = horizonError.extras !== undefined ? horizonError.extras : null;
 
-    const resultCode =
-      horizonError?.extras?.result_codes?.transaction ??
-      horizonError?.extras?.result_codes?.operations?.[0] ??
-      null;
+    let resultCode = null;
+    if (extras && extras.result_codes) {
+      if (typeof extras.result_codes.transaction === "string") {
+        resultCode = extras.result_codes.transaction;
+      } else if (
+        Array.isArray(extras.result_codes.operations) &&
+        extras.result_codes.operations.length > 0
+      ) {
+        resultCode = extras.result_codes.operations[0];
+      }
+    }
 
     const mappedStatus = mapHorizonErrorToStatus(resultCode);
-    const status = mappedStatus ?? err.response.status ?? 400;
+    const httpStatus = mappedStatus ?? err.response.status ?? 400;
 
-    const message = horizonError.detail || horizonError.title || "Horizon Error";
-    const code = resultCode;
-    const humanMessage = code ? translateHorizonError(code) : null;
-    logError(status, req, message);
-    return res.status(status).json({
+    const body = {
       success: false,
       error: {
         type: "HorizonError",
         title: horizonError.title || "Horizon Error",
         detail: horizonError.detail || "An error occurred with the Stellar network.",
-        status: horizonError.status || err.response.status,
-        extras: horizonError.extras || null,
-        ...(code && { code }),
-        ...(humanMessage && { message: humanMessage }),
+        status: err.response.status,
+        extras,
       },
-    });
+    };
+
+    if (resultCode) {
+      body.error.code = resultCode;
+      const humanMessage = translateHorizonError(resultCode);
+      if (humanMessage && typeof humanMessage === "string" && humanMessage.length > 0) {
+        body.error.message = humanMessage;
+      }
+    }
+
+    logError(httpStatus, req, horizonError.detail || horizonError.title || "Horizon Error");
+    return res.status(httpStatus).json(body);
   }
+
 
   // Payload too large errors from body parsers
   if (err.type === "entity.too.large" || err.status === 413) {
