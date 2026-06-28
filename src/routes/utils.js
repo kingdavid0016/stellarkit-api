@@ -468,6 +468,30 @@ router.post("/decode-xdr", (req, res, next) => {
 });
 
 /**
+ * GET /utils/network-passphrase
+ * Returns the Stellar network passphrase for the currently configured network.
+ * Useful for developers building and signing transactions.
+ *
+ * The network is determined by the STELLAR_NETWORK env var (defaults to "testnet").
+ *
+ * @returns {{ network: string, passphrase: string }}
+ *
+ * @example
+ * GET /utils/network-passphrase
+ * { "network": "testnet", "passphrase": "Test SDF Network ; September 2015" }
+ */
+router.get("/network-passphrase", (req, res, next) => {
+  try {
+    const network = process.env.STELLAR_NETWORK || "testnet";
+    const passphrase = network === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
+
+    return success(res, { network, passphrase });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * GET /utils/keypair
  * Generates a new random Stellar keypair for testnet use.
  * Only available when STELLAR_NETWORK=testnet.
