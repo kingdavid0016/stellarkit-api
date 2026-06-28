@@ -182,6 +182,12 @@ StellarKit API currently supports Soroban contract inspection through the `/soro
 
 ---
 
+## Documentation
+
+- [API Design Guidelines](docs/api-design.md) — Explains StellarKit's response envelope, pagination conventions, asset shapes, timestamp formats, amount formats, and error structure.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
